@@ -1,3 +1,9 @@
 pypinyin
 pyyaml
 requests
+# 上游 fcitx5-pinyin-zhwiki 的 convert.py / mediawiki.py 所需
+regex
+tenacity
+OpenCC
+# 萌娘百科词典构建工具（上游 mw2fcitx CLI）
+mw2fcitx[opencc]

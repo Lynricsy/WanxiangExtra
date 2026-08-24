@@ -1,4 +1,22 @@
 {
-  "mw2fcitx": "20260812",
-  "fcitx5-pinyin-zhwiki": "0.3.0"
+  "moegirl": {
+    "id": "",
+    "built": ""
+  },
+  "web-slang": {
+    "id": "",
+    "built": ""
+  },
+  "zhwiki": {
+    "id": "",
+    "built": ""
+  },
+  "zhwikisource": {
+    "id": "",
+    "built": ""
+  },
+  "zhwiktionary": {
+    "id": "",
+    "built": ""
+  }
 }

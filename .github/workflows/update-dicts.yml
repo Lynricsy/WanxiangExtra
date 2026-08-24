@@ -2,212 +2,116 @@ name: Update RIME Dictionaries
 
 on:
   schedule:
+    # 每日 UTC 02:00：Wikimedia 转储（每月 1 日 / 20 日前后）与网络用语页面变化都能及时跟进
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       force:
-        description: '强制更新（忽略版本检查）'
+        description: '强制重建（忽略构建记录）'
         required: false
         type: boolean
         default: false
+      variants:
+        description: '只构建指定变体（逗号分隔，留空为全部）：zhwiki,zhwiktionary,zhwikisource,web-slang,moegirl'
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: dict-update
-  cancel-in-progress: true
+  # 构建耗时可达数十分钟，取消进行中的任务只会浪费算力
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 360
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: pip install -r requirements.txt
 
-      - name: 检查上游更新
-        id: check
+      - name: 自建词典（仅重建上游数据有变化的变体）
+        id: build
+        continue-on-error: true
         env:
-          FORCE_UPDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+          VARIANTS: ${{ inputs.variants }}
         run: |
-          python3 - <<'PY'
-          import json
-          import os
+          set -euo pipefail
+          args=(--raw-dir raw --work-dir tmp/build)
+          if [ "$FORCE" = "true" ]; then
+            args+=(--force)
+          fi
+          for v in ${VARIANTS//,/ }; do
+            args+=(--variant "$v")
+          done
+          python build_dicts.py "${args[@]}"
 
-          from version_checker import (
-              REPOS,
-              _extract_mw2fcitx_assets,
-              _extract_zhwiki_assets,
-              check_updates,
-              get_latest_release,
-          )
-
-          force = os.environ.get("FORCE_UPDATE", "false").lower() == "true"
-          update_candidates = check_updates("versions.json")
-          has_updates = bool(update_candidates)
-          should_run = force or has_updates
-
-          effective_updates = update_candidates
-          if should_run:
-              effective_updates = {}
-              for key, config in REPOS.items():
-                  release = get_latest_release(config["owner"], config["repo"])
-                  tag = release.get("tag_name", "") if release else ""
-                  assets = release.get("assets", []) if release else []
-                  if not tag:
-                      continue
-
-                  if key == "mw2fcitx":
-                      asset_urls = _extract_mw2fcitx_assets(assets)
-                  elif key == "fcitx5-pinyin-zhwiki":
-                      asset_urls = _extract_zhwiki_assets(assets)
-                  else:
-                      asset_urls = {}
-
-                  effective_updates[key] = {
-                      "tag": tag,
-                      "assets": asset_urls,
-                  }
-
-          print(f"发现 {len(update_candidates)} 个仓库有更新")
-          if force and not has_updates:
-              print("force=true，忽略版本差异并继续执行")
-          if not should_run:
-              print("无更新且未启用 force，后续步骤将跳过")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write(f"has_updates={str(has_updates).lower()}\n")
-              f.write(f"should_run={str(should_run).lower()}\n")
-              f.write(f"updates={json.dumps(effective_updates, ensure_ascii=False)}\n")
-          PY
-
-      - name: No updates
-        if: steps.check.outputs.should_run != 'true'
-        run: echo "No dictionary updates detected, skipping download and release."
-
-      - name: 下载词典
-        id: download
-        if: steps.check.outputs.should_run == 'true'
-        env:
-          UPDATES_JSON: ${{ steps.check.outputs.updates }}
+      - name: 统计原始产物
+        id: raw
         run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
+          set -euo pipefail
+          shopt -s nullglob
+          files=(raw/*.dict.yaml)
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          printf '构建产物：%s\n' "${files[*]:-无}"
 
-          from version_checker import download_file, load_versions, save_versions
-
-          required_variants = [
-              "moegirl",
-              "zhwiki",
-              "zhwiktionary",
-              "zhwikisource",
-              "web-slang",
-          ]
-
-          updates = json.loads(os.environ.get("UPDATES_JSON", "{}"))
-          if not updates:
-              raise SystemExit("should_run=true 但未收到可下载更新信息")
-
-          all_assets = {}
-          for repo, info in updates.items():
-              all_assets.update(info.get("assets", {}))
-
-          missing = [variant for variant in required_variants if variant not in all_assets]
-          if missing:
-              raise SystemExit(f"缺少词典下载地址: {', '.join(missing)}")
-
-          download_dir = Path("tmp/downloads")
-          download_dir.mkdir(parents=True, exist_ok=True)
-
-          downloaded = {}
-          for variant in required_variants:
-              url = all_assets[variant]
-              dest = download_dir / f"{variant}.dict.yaml"
-              print(f"下载 {variant}: {url}")
-              download_file(url, str(dest))
-              downloaded[variant] = str(dest)
-
-          versions = load_versions("versions.json")
-          for repo, info in updates.items():
-              tag = info.get("tag", "")
-              if tag:
-                  versions[repo] = tag
-          save_versions(versions, "versions.json")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write(f"downloaded={json.dumps(downloaded, ensure_ascii=False)}\n")
-          PY
-
-      - name: 处理词典
-        id: process
-        if: steps.check.outputs.should_run == 'true'
-        env:
-          DOWNLOADED_JSON: ${{ steps.download.outputs.downloaded }}
+      - name: 加工词典（带声调拼音 + 墨奇辅助码）
+        if: steps.raw.outputs.count != '0'
         run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
+          set -euo pipefail
+          mkdir -p output
+          for f in raw/*.dict.yaml; do
+            name="$(basename "$f" .dict.yaml)"
+            echo "处理 $f -> output/$name.pro.dict.yaml"
+            python process_dict.py "$f" "output/$name.pro.dict.yaml"
+          done
 
-          required_variants = [
-              "moegirl",
-              "zhwiki",
-              "zhwiktionary",
-              "zhwikisource",
-              "web-slang",
-          ]
 
-          downloaded = json.loads(os.environ.get("DOWNLOADED_JSON", "{}"))
-          output_dir = Path("output")
-          output_dir.mkdir(parents=True, exist_ok=True)
-
-          for variant in required_variants:
-              input_path = downloaded.get(variant)
-              if not input_path:
-                  raise SystemExit(f"未找到 {variant} 输入文件")
-
-              output_path = output_dir / f"{variant}.pro.dict.yaml"
-              print(f"处理 {variant}: {input_path} -> {output_path}")
-              subprocess.run(
-                  ["python3", "process_dict.py", input_path, str(output_path)],
-                  check=True,
-              )
-          PY
-
-      - name: 提交版本更新
-        if: steps.check.outputs.should_run == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add versions.json
-          git diff --cached --quiet || git commit -m "chore: 📝 更新版本记录"
-          git push
-
-      - name: 更新 Release
-        if: steps.check.outputs.should_run == 'true'
+      - name: 发布词典
+        if: steps.raw.outputs.count != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ls output/*.pro.dict.yaml
-          gh release delete latest --cleanup-tag --yes || true
-          gh release create latest \
-            --title "最新词典 ($(date +%Y-%m-%d))" \
-            --notes "自动更新于 $(date +%Y-%m-%d\ %H:%M:%S\ UTC)" \
-            output/*.pro.dict.yaml
+          set -euo pipefail
+          ls -l output/*.pro.dict.yaml
+          # 滚动发布：只覆盖本次重建的词典，未重建的变体保留上一次的可下载产物
+          gh release view latest >/dev/null 2>&1 || \
+            gh release create latest --title "最新词典" --notes "初始化"
+          gh release upload latest output/*.pro.dict.yaml --clobber
+          gh release edit latest \
+            --title "最新词典 ($(date -u +%Y-%m-%d))" \
+            --notes "自建于 $(date -u '+%Y-%m-%d %H:%M:%S UTC')；本次更新：$(ls output | tr '\n' ' ')"
+
+      - name: 提交构建记录
+        if: steps.raw.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add versions.json
+          git diff --cached --quiet || git commit \
+            -m "chore(dict): 📝 更新构建记录" \
+            -m "Co-authored-by: Wine Fox <fox@ling.plus>"
+          git push
+
+      - name: 构建失败时标记任务失败
+        if: steps.build.outcome == 'failure'
+        run: |
+          echo "至少一个词典变体构建失败，详见「自建词典」步骤日志" >&2
+          exit 1
