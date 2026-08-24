@@ -51,7 +51,7 @@ _source: dict[str, object] = {
     "kwargs": _kwargs,
 }
 
-_api_path = os.environ.get("MOEGIRL_API_PATH", "https://zh.moegirl.org.cn/api.php")
+_api_path = os.environ.get("MOEGIRL_API_PATH", "https://mobile.moegirl.org.cn/api.php")
 if _api_path:
     _source["api_path"] = _api_path
 

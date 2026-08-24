@@ -46,11 +46,11 @@
 |------|----------|------------------------------|
 | zhwiki / zhwiktionary / zhwikisource | Wikimedia `all-titles-in-ns0` 转储 | [felixonmars/fcitx5-pinyin-zhwiki](https://github.com/felixonmars/fcitx5-pinyin-zhwiki) 的 Makefile 与 convert.py |
 | web-slang | zh.wikipedia.org 页面 wikitext | 同上仓库的 `zhwiki-web-slang.py` |
-| moegirl | zh.moegirl.org.cn MediaWiki API | [outloudvi/mw2fcitx](https://github.com/outloudvi/mw2fcitx) CLI + 其 `pkg-moegirl` 分支的拼音修正表与补充词表 |
+| moegirl | mobile.moegirl.org.cn MediaWiki API | [outloudvi/mw2fcitx](https://github.com/outloudvi/mw2fcitx) CLI + 其 `pkg-moegirl` 分支的拼音修正表与补充词表 |
 
 辅助码与自定义拼音修正数据来自 [amzxyz/RIME-LMDG](https://github.com/amzxyz/RIME-LMDG)。
 
-> 萌娘百科的 `list=allpages` 接口对部分来源 IP 返回 `action-notallowed`。抓取失败时会退回到 mw2fcitx 最新 Release 里的 `titles.txt` 作为标题清单，词典本体仍由本项目构建；可用 `--no-moegirl-fallback` 关闭该回退。
+> 萌娘百科主站 `zh.moegirl.org.cn` 会拒绝匿名 `list=allpages`，因此默认使用官方 `mobile.moegirl.org.cn` API；若该入口也抓取失败，才回退到 mw2fcitx 最新 Release 的 `titles.txt`。可用 `--no-moegirl-fallback` 禁止回退。
 
 ## 使用方法
 
