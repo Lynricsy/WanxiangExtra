@@ -86,6 +86,10 @@ python process_dict.py raw/web-slang.dict.yaml output/web-slang.pro.dict.yaml
 | `--moegirl-offline` | 跳过萌百 API，直接使用上游 `titles.txt` |
 | `--moegirl-title-limit` | 限制标题数量，用于冒烟测试 |
 
+萌百 API 若限制 GitHub Runner 出口，可设置仓库 Actions Secret `MOEGIRL_PROXY_URL`，
+值为 `socks5h://用户名:密码@主机:端口` 或 `http://用户名:密码@主机:端口`。
+该代理仅注入萌百 API 抓取子进程；Git、Wikimedia 与 fallback `titles.txt` 下载仍然直连。
+
 `process_dict.py` 会自动从网络下载辅助码数据和自定义拼音修正，无需额外配置，可通过 `--aux-url` 指定自定义辅助码数据源。
 
 ## 自动更新机制

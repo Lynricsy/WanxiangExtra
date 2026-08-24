@@ -208,11 +208,24 @@ def build_moegirl(
     if title_limit > 0:
         env["MOEGIRL_TITLE_LIMIT"] = str(title_limit)
 
+    # 代理 Secret 只映射给直接抓取萌百 API 的子进程。父进程下载 fallback
+    # 标题清单时仍保持直连，也不把自定义 Secret 名传给任何子进程。
+    proxy_url = env.pop("MOEGIRL_PROXY_URL", "").strip()
+    api_env = env.copy()
+    if proxy_url:
+        api_env.update(
+            {
+                "HTTP_PROXY": proxy_url,
+                "HTTPS_PROXY": proxy_url,
+                "ALL_PROXY": proxy_url,
+            }
+        )
+
     binary = _mw2fcitx_bin(env)
 
     if use_api:
         try:
-            upstream.run([binary, "-c", str(config)], cwd=work, env=env)
+            upstream.run([binary, "-c", str(config)], cwd=work, env=api_env)
             return _publish(output, raw_dir, "moegirl"), f"api:{_dt.date.today():%Y%m%d}"
         except subprocess.CalledProcessError as e:
             if not allow_fallback:

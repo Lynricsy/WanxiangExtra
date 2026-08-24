@@ -51,6 +51,7 @@ jobs:
         env:
           FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
           VARIANTS: ${{ inputs.variants }}
+          MOEGIRL_PROXY_URL: ${{ secrets.MOEGIRL_PROXY_URL }}
         run: |
           set -euo pipefail
           args=(--raw-dir raw --work-dir tmp/build)

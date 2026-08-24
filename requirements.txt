@@ -1,6 +1,6 @@
 pypinyin
 pyyaml
-requests
+requests[socks]
 # 上游 fcitx5-pinyin-zhwiki 的 convert.py / mediawiki.py 所需
 regex
 tenacity
