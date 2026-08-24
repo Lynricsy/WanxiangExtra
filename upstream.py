@@ -34,7 +34,7 @@ def run(
     return subprocess.run(
         [str(c) for c in cmd],
         cwd=str(cwd) if cwd else None,
-        env=env,
+        env=env if env is not None else script_env(),
         check=True,
         capture_output=capture,
         text=capture,
@@ -53,6 +53,9 @@ def script_env() -> dict[str, str]:
     系统解释器的符号链接，解析后会直接指到 /usr/bin，反而丢掉虚拟环境。
     """
     env = dict(os.environ)
+    # Actions Secret 绝不能暴露给动态克隆的普通上游脚本；只有调用方显式
+    # 映射到专用子进程时才能使用。
+    env.pop("MOEGIRL_PROXY_URL", None)
     bin_dir = str(Path(sys.executable).parent)
     env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
     return env

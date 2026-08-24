@@ -208,9 +208,9 @@ def build_moegirl(
     if title_limit > 0:
         env["MOEGIRL_TITLE_LIMIT"] = str(title_limit)
 
-    # 代理 Secret 只映射给直接抓取萌百 API 的子进程。父进程下载 fallback
-    # 标题清单时仍保持直连，也不把自定义 Secret 名传给任何子进程。
-    proxy_url = env.pop("MOEGIRL_PROXY_URL", "").strip()
+    # 直接从父进程读取 Secret；script_env() 已默认剔除它，动态克隆的普通
+    # 上游代码无法读取。代理只映射给直接抓取萌百 API 的子进程。
+    proxy_url = os.environ.get("MOEGIRL_PROXY_URL", "").strip()
     api_env = env.copy()
     if proxy_url:
         api_env.update(
