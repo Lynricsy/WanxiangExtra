@@ -5,5 +5,5 @@ requests
 regex
 tenacity
 OpenCC
-# 萌娘百科词典构建工具：直接安装上游 master，构建时跟随最新代码
-mw2fcitx[opencc] @ git+https://github.com/outloudvi/mw2fcitx.git@master
+# 萌娘百科词典构建工具（上游 mw2fcitx CLI）
+mw2fcitx[opencc]
