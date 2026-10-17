@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -180,13 +181,17 @@ def build_moegirl(
     title_limit: int = -1,
     request_delay: float = 2.0,
     use_api: bool = True,
+    api_attempts: int = 3,
+    retry_wait: float = 30.0,
 ) -> tuple[Path, str]:
     """
     构建萌娘百科词典。
 
-    首选直接抓取萌百 MediaWiki API 的标题清单；该 API 对部分来源 IP 返回
-    ``action-notallowed``，此时退回到 mw2fcitx Release 里的 titles.txt——
-    词典仍由我们自己构建，只是标题清单来自上游最近一次抓取。
+    首选直接抓取萌百 MediaWiki API 的标题清单。抓取中途偶发的网关超时会让
+    mw2fcitx 直接退出，因此借助它的断点文件（``partial``）原地续抓，最多
+    ``api_attempts`` 次；仍失败（例如 API 对来源 IP 返回 ``action-notallowed``）
+    时退回到 mw2fcitx Release 里的 titles.txt——词典仍由我们自己构建，只是
+    标题清单来自上游最近一次抓取。
 
     Returns:
         (产物路径, 标题来源标识)
@@ -212,6 +217,10 @@ def build_moegirl(
     # 上游代码无法读取。代理只映射给直接抓取萌百 API 的子进程。
     proxy_url = os.environ.get("MOEGIRL_PROXY_URL", "").strip()
     api_env = env.copy()
+    # 断点文件只服务于本次构建的重试；先清掉旧的，避免续上一次运行的进度
+    partial = work / "titles.partial.json"
+    partial.unlink(missing_ok=True)
+    api_env["MOEGIRL_PARTIAL"] = str(partial)
     if proxy_url:
         api_env.update(
             {
@@ -224,13 +233,19 @@ def build_moegirl(
     binary = _mw2fcitx_bin(env)
 
     if use_api:
-        try:
-            upstream.run([binary, "-c", str(config)], cwd=work, env=api_env)
-            return _publish(output, raw_dir, "moegirl"), f"api:{_dt.date.today():%Y%m%d}"
-        except subprocess.CalledProcessError as e:
-            if not allow_fallback:
-                raise
-            print(f"⚠️  萌百 API 抓取失败（退出码 {e.returncode}），回退到上游 titles.txt")
+        for attempt in range(1, api_attempts + 1):
+            try:
+                upstream.run([binary, "-c", str(config)], cwd=work, env=api_env)
+                partial.unlink(missing_ok=True)
+                return _publish(output, raw_dir, "moegirl"), f"api:{_dt.date.today():%Y%m%d}"
+            except subprocess.CalledProcessError as e:
+                print(f"⚠️  萌百 API 抓取第 {attempt}/{api_attempts} 次失败（退出码 {e.returncode}）")
+                if attempt < api_attempts:
+                    time.sleep(retry_wait)
+                    continue
+                if not allow_fallback:
+                    raise
+        print("⚠️  萌百 API 重试耗尽，回退到上游 titles.txt")
 
     tag, url = latest_upstream_titles(session)
     titles = work / "upstream-titles.txt"
@@ -342,6 +357,7 @@ def build(args: argparse.Namespace) -> int:
                     title_limit=args.moegirl_title_limit,
                     request_delay=args.moegirl_request_delay,
                     use_api=not args.moegirl_offline,
+                    api_attempts=args.moegirl_api_attempts,
                 )
                 records[variant] = versions.make_record(source_id)
 
@@ -398,6 +414,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=-1,
         help="萌百标题数量上限，仅用于冒烟测试",
+    )
+    parser.add_argument(
+        "--moegirl-api-attempts",
+        type=int,
+        default=3,
+        help="萌百 API 抓取最多尝试次数（失败后从断点续抓）",
     )
     parser.add_argument(
         "--moegirl-offline",

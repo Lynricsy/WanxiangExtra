@@ -50,7 +50,7 @@
 
 辅助码与自定义拼音修正数据来自 [amzxyz/RIME-LMDG](https://github.com/amzxyz/RIME-LMDG)。
 
-> 萌娘百科主站 `zh.moegirl.org.cn` 会拒绝匿名 `list=allpages`，因此默认使用官方 `mobile.moegirl.org.cn` API；若该入口也抓取失败，才回退到 mw2fcitx 最新 Release 的 `titles.txt`。可用 `--no-moegirl-fallback` 禁止回退。
+> 萌娘百科主站 `zh.moegirl.org.cn` 会拒绝匿名 `list=allpages`，因此默认使用官方 `mobile.moegirl.org.cn` API。抓取中途失败（如网关超时返回非 JSON）时，借助 mw2fcitx 的断点文件从中断处续抓，默认最多尝试 3 次；仍失败才回退到 mw2fcitx 最新 Release 的 `titles.txt`。可用 `--no-moegirl-fallback` 禁止回退。
 
 ## 使用方法
 
@@ -83,6 +83,7 @@ python process_dict.py raw/web-slang.dict.yaml output/web-slang.pro.dict.yaml
 |------|------|
 | `--raw-dir` / `--work-dir` | 原始产物目录（默认 `raw/`）、上游代码与中间产物目录（默认 `tmp/build/`） |
 | `--moegirl-interval-days` | 萌百重建周期，默认 30 天，避免频繁全站抓取 |
+| `--moegirl-api-attempts` | 萌百 API 抓取最多尝试次数，默认 3，失败后从断点续抓 |
 | `--moegirl-offline` | 跳过萌百 API，直接使用上游 `titles.txt` |
 | `--moegirl-title-limit` | 限制标题数量，用于冒烟测试 |
 

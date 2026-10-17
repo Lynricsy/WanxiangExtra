@@ -16,6 +16,8 @@ libime 的 pinyin 生成器**，只产出 RIME 词典——本项目只需要 di
 - MOEGIRL_TITLE_FILES   额外标题文件，os.pathsep 分隔（回退到上游 titles.txt 时使用）
 - MOEGIRL_TITLE_LIMIT   标题数量上限，仅用于冒烟测试
 - MOEGIRL_REQUEST_DELAY API 翻页间隔秒数（默认 2，避免给上游站点压力）
+- MOEGIRL_PARTIAL       断点文件路径；抓取中断时 mw2fcitx 把已得标题与翻页位置写入，
+                        下次运行从断点续抓
 - MOEGIRL_VERSION       写入词典头部的 version 字段
 """
 
@@ -45,6 +47,10 @@ _kwargs: dict[str, object] = {
 _limit = int(os.environ.get("MOEGIRL_TITLE_LIMIT", "-1"))
 if _limit > 0:
     _kwargs["title_limit"] = _limit
+
+_partial = os.environ.get("MOEGIRL_PARTIAL", "")
+if _partial:
+    _kwargs["partial"] = _partial
 
 _source: dict[str, object] = {
     "file_path": _title_files,
