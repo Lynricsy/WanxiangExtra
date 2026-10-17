@@ -21,13 +21,16 @@ _CUSTOM_DATA_LOADED = False
 _CUSTOM_DATA_ATTEMPTED = False
 
 
-def _is_chinese_char(char: str) -> bool:
+def is_hanzi(char: str) -> bool:
+    """是否为可注音的汉字（含〇与兼容表意文字补充区）。"""
     code = ord(char)
     return (
-        0x3400 <= code <= 0x4DBF
+        code == 0x3007
+        or 0x3400 <= code <= 0x4DBF
         or 0x4E00 <= code <= 0x9FFF
         or 0xF900 <= code <= 0xFAFF
         or 0x20000 <= code <= 0x2EBEF
+        or 0x2F800 <= code <= 0x2FA1F
     )
 
 
@@ -165,7 +168,7 @@ def build_pro_pinyin(word: str, aux_map: dict[str, str]) -> str:
 
     for index, char in enumerate(word):
         syllable = toned_syllables[index] if index < len(toned_syllables) else char
-        aux_code = aux_map.get(char) if _is_chinese_char(char) else None
+        aux_code = aux_map.get(char) if is_hanzi(char) else None
         if aux_code:
             result_parts.append(f"{syllable};{aux_code}")
         else:

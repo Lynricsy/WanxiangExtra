@@ -10,24 +10,27 @@ from pathlib import Path
 from typing import Optional
 
 from aux_loader import get_aux_map
-from pinyin_engine import build_pro_pinyin
+from pinyin_engine import build_pro_pinyin, is_hanzi
 
 
 _YAML_HEADS = ("---", "name:", "version:", "sort:", "...")
 
+# 上游 convert.py 注音前剔除的间隔号与连字符（_INTERPUNCT_TRANSTAB）；
+# 词条本身保留它们，编码里不能出现——万象的拼写运算无法从键盘输入这些音节。
+_SEPARATORS = str.maketrans("", "", "·-‐–—")
 
-def _contains_cjk(text: str) -> bool:
-    for ch in text:
-        code = ord(ch)
-        if (
-            0x3400 <= code <= 0x4DBF
-            or 0x4E00 <= code <= 0x9FFF
-            or 0xF900 <= code <= 0xFAFF
-            or 0x20000 <= code <= 0x2EBEF
-            or 0x2F800 <= code <= 0x2FA1F
-        ):
-            return True
-    return False
+
+def _encodable_text(word: str) -> Optional[str]:
+    """
+    返回用于注音的纯汉字串。
+
+    去掉间隔号后仍含汉字以外的字符（拉丁/希腊字母等）时返回 None：万象 pro
+    词库只收纯汉字词条，字母混排词条归 mixedcode 词库，放进来也打不出。
+    """
+    text = word.translate(_SEPARATORS)
+    if text and all(is_hanzi(ch) for ch in text):
+        return text
+    return None
 
 
 def _split_newline(line: str) -> tuple[str, str]:
@@ -70,7 +73,8 @@ def _rewrite_header_line(line: str, today: str) -> str:
     return f"{indent}version: {new_value}{comment}{nl}"
 
 
-def _process_data_line(line: str, line_no: int, aux_map: dict[str, str]) -> str:
+def _process_data_line(line: str, line_no: int, aux_map: dict[str, str]) -> Optional[str]:
+    """加工一行词条；返回 None 表示该词条应丢弃。"""
     try:
         if not line.strip():
             return line
@@ -78,27 +82,14 @@ def _process_data_line(line: str, line_no: int, aux_map: dict[str, str]) -> str:
             return line
 
         content, nl = _split_newline(line)
-        if "\t" in content:
-            cols = content.split("\t")
-            if not cols:
-                return line
+        cols = content.split("\t")
+        word = cols[0].strip()
+        text = _encodable_text(word)
+        if text is None:
+            return None
 
-            word_raw = cols[0]
-            word = word_raw.strip()
-            if not word or not _contains_cjk(word):
-                return line
-
-            enhanced = build_pro_pinyin(word, aux_map)
-            out_cols = [word, enhanced]
-            if len(cols) > 2:
-                out_cols.extend(cols[2:])
-            return "\t".join(out_cols) + nl
-
-        word = content.strip()
-        if not word or not _contains_cjk(word):
-            return line
-        enhanced = build_pro_pinyin(word, aux_map)
-        return f"{word}\t{enhanced}{nl}"
+        out_cols = [word, build_pro_pinyin(text, aux_map), *cols[2:]]
+        return "\t".join(out_cols) + nl
     except Exception as e:
         print(f"[WARN] 第 {line_no} 行处理失败：{e!r}；已原样保留该行", file=sys.stderr)
         return line
@@ -115,6 +106,7 @@ def process_file(input_path: str, output_path: str, aux_map: dict[str, str]) -> 
         in_path.open("r", encoding="utf-8") as f_in,
         out_path.open("w", encoding="utf-8") as f_out,
     ):
+        dropped = 0
         for idx, raw in enumerate(f_in):
             line_no = idx + 1
             if idx < len(_YAML_HEADS):
@@ -124,7 +116,14 @@ def process_file(input_path: str, output_path: str, aux_map: dict[str, str]) -> 
                     f_out.write(raw)
                 continue
 
-            f_out.write(_process_data_line(raw, line_no, aux_map))
+            processed = _process_data_line(raw, line_no, aux_map)
+            if processed is None:
+                dropped += 1
+            else:
+                f_out.write(processed)
+
+    if dropped:
+        print(f"[INFO] {in_path.name}：丢弃 {dropped} 条含非汉字字符的词条", file=sys.stderr)
 
 
 def process_all(
