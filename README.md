@@ -80,6 +80,9 @@ python build_dicts.py --force              # 忽略构建记录，强制重建
 
 # 2) 加工为 .pro 词典
 python process_dict.py raw/web-slang.dict.yaml output/web-slang.pro.dict.yaml
+
+# 3) 回归测试（离线，仅标准库）
+python -m unittest discover tests
 ```
 
 常用参数：
@@ -126,6 +129,7 @@ WanxiangExtra/
 ├── aux_loader.py               # 辅助码数据下载与墨奇码解析
 ├── pinyin_engine.py            # 带声调拼音生成引擎（含自定义拼音修正）
 ├── process_dict.py             # 词典加工主程序（流式逐行转换）
+├── tests/                      # 词条取舍与编码的回归测试（unittest）
 ├── versions.json               # 各变体的数据版本记录（自动维护）
 └── requirements.txt            # Python 依赖
 ```

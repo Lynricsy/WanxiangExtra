@@ -22,15 +22,14 @@ _CUSTOM_DATA_ATTEMPTED = False
 
 
 def is_hanzi(char: str) -> bool:
-    """是否为可注音的汉字（含〇与兼容表意文字补充区）。"""
+    """是否为可注音的汉字（含〇；第 2、3 平面整体是表意文字区，覆盖扩展 B–J 与兼容补充）。"""
     code = ord(char)
     return (
         code == 0x3007
         or 0x3400 <= code <= 0x4DBF
         or 0x4E00 <= code <= 0x9FFF
         or 0xF900 <= code <= 0xFAFF
-        or 0x20000 <= code <= 0x2EBEF
-        or 0x2F800 <= code <= 0x2FA1F
+        or 0x20000 <= code <= 0x3FFFF
     )
 
 
